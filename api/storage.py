@@ -169,6 +169,37 @@ def add_contact(data: dict, name: str, phone: str) -> dict:
     return data
 
 
+def merge_contacts(data: dict, new_contacts: list) -> dict:
+    """ממזג רשימת אנשי קשר חדשה (כפי שחולצה מקובץ שהועלה דרך האתר) אל
+    תוך אנשי הקשר הקיימים. new_contacts: רשימת dict עם 'name' ו-'phone'.
+    התנהגות המיזוג: לפי שם זהה (strip, השוואה מדויקת) - מעדכן מספר;
+    אחרת - מוסיף כאיש קשר חדש. מחזיר (data, added_count, updated_count).
+    אינו שומר בעצמו - יש לקרוא ל-save_user בנפרד."""
+    contacts = data.setdefault('contacts', [])
+    by_name = {c.get('name', '').strip(): c for c in contacts if c.get('name', '').strip()}
+
+    added = 0
+    updated = 0
+    for entry in new_contacts:
+        name = (entry.get('name') or '').strip()
+        phone = _normalize_phone(entry.get('phone') or '')
+        if not name or not phone:
+            continue
+
+        existing = by_name.get(name)
+        if existing:
+            if existing.get('phone') != phone:
+                existing['phone'] = phone
+                updated += 1
+        else:
+            new_contact = {'name': name, 'phone': phone}
+            contacts.append(new_contact)
+            by_name[name] = new_contact
+            added += 1
+
+    return data, added, updated
+
+
 def add_history_entry(data: dict, target_phone: str, name: Optional[str] = None) -> dict:
     """מוסיף רשומת היסטוריה חדשה בתחילת הרשימה, ושומר רק על
     MAX_HISTORY_ENTRIES הרשומות האחרונות."""
@@ -183,3 +214,68 @@ def add_history_entry(data: dict, target_phone: str, name: Optional[str] = None)
     history.insert(0, entry)
     data['history'] = history[:MAX_HISTORY_ENTRIES]
     return data
+
+
+# --------------------------------------------------------------------------
+# קודי אימות (לאימות בעלות על מספר טלפון דרך שיחה לשלוחת ה-API)
+# --------------------------------------------------------------------------
+# נשמרים בקובץ נפרד לגמרי מקובץ אנשי הקשר של המשתמש (תחת תיקיית verify/
+# ב-bucket), כך שאין שום חפיפה/סיכון לדריסת נתוני אנשי קשר. כל רשומה
+# כוללת את הקוד עצמו ואת זמן התפוגה שלה (JSON בלבד - ללא קבצים נוספים).
+
+VERIFICATION_CODE_TTL_SECONDS = 5 * 60  # 5 דקות תוקף לקוד שנוצר
+
+
+def _verify_key_for(phone: str) -> str:
+    return f'verify/{_normalize_phone(phone)}.json'
+
+
+def create_verification_code(phone: str, code: str) -> None:
+    """שומר קוד אימות חדש עבור מספר טלפון (דורס קוד קודם אם קיים)."""
+    client = _client()
+    key = _verify_key_for(phone)
+    expires_at = datetime.now(timezone.utc).timestamp() + VERIFICATION_CODE_TTL_SECONDS
+    body = json.dumps({
+        'phone': _normalize_phone(phone),
+        'code': code,
+        'expires_at': expires_at,
+    }, ensure_ascii=False).encode('utf-8')
+
+    client.put_object(
+        Bucket=HF_S3_BUCKET,
+        Key=key,
+        Body=body,
+        ContentType='application/json; charset=utf-8',
+    )
+
+
+def get_verification_code(phone: str) -> Optional[dict]:
+    """טוען את רשומת קוד האימות הפעילה עבור מספר טלפון, אם קיימת ולא
+    פגה - אחרת מחזיר None."""
+    client = _client()
+    key = _verify_key_for(phone)
+
+    try:
+        obj = client.get_object(Bucket=HF_S3_BUCKET, Key=key)
+        record = json.loads(obj['Body'].read().decode('utf-8'))
+    except ClientError as exc:
+        error_code = exc.response.get('Error', {}).get('Code', '')
+        if error_code in ('NoSuchKey', '404', 'NotFound'):
+            return None
+        raise
+
+    if datetime.now(timezone.utc).timestamp() > record.get('expires_at', 0):
+        return None
+
+    return record
+
+
+def delete_verification_code(phone: str) -> None:
+    """מוחק את קוד האימות עבור מספר טלפון (לאחר שימוש מוצלח, או כדי
+    לאפשר יצירת קוד חדש)."""
+    client = _client()
+    key = _verify_key_for(phone)
+    try:
+        client.delete_object(Bucket=HF_S3_BUCKET, Key=key)
+    except ClientError:
+        pass
