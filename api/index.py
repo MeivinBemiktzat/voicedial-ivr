@@ -45,6 +45,12 @@ KEYWORDS_RECENT_CALLS = ('שיחות אחרונות', 'שיחה אחרונה', '
 KEYWORDS_CONTACTS = ('אנשי קשר', 'איש קשר', 'אנשי הקשר')
 KEYWORDS_ADD_CONTACT = ('הוסף איש קשר', 'הוספת איש קשר', 'הוסף')
 
+# מילת המפתח להפקת קוד אימות לאתר (יבוא אנשי קשר) - ר' storage.py
+# ו-auth.py. המתקשר אומר ביטוי זה, ובתנאי שקיים קוד אימות ממתין עבור
+# מספר הטלפון שממנו הוא מתקשר בפועל (ApiPhone - לא ניתן לזיוף), הקוד
+# נקרא לו בקול.
+KEYWORDS_VERIFICATION_CODE = ('קוד אימות', 'קוד האימות', 'אימות')
+
 PHONE_DIGITS_RE = re.compile(r'\d+')
 
 # מילון בסיסי להמרת ספרות שנאמרות במילים בעברית לספרות - כדי שתמלול כמו
@@ -280,12 +286,34 @@ def _handle_add_contact(params: dict, user_data: dict, token: str) -> str:
     )
 
 
+def _handle_verification_code(caller_phone: str) -> str:
+    """משמיע את קוד האימות הממתין עבור מספר הטלפון שבאמת מתקשר כרגע
+    (caller_phone = ApiPhone, המגיע מימות המשיח ולא ניתן לזיוף על ידי
+    המתקשר). ר' auth.py להסבר המלא על מנגנון האימות."""
+    record = storage.get_verification_code(caller_phone)
+    if not record:
+        return _resp_message_and_hangup(
+            'לא נמצא קוד אימות ממתין עבור מספר זה. '
+            'יש להזין תחילה את המספר באתר וללחוץ על שלח קוד, ואז להתקשר שוב.'
+        )
+
+    code = record['code']
+    spoken_code = ' '.join(code)  # מרווח בין כל ספרה - כדי שתישמע ספרה-ספרה
+    return _resp_message_and_hangup(
+        f'קוד האימות שלכם הוא: {spoken_code}. חזרה: {spoken_code}.'
+    )
+
+
 def _handle_main_intent(params: dict, user_data: dict, token: str) -> str:
     """השלב הראשון בשיחה: תמלול הכוונה החופשית וניתוב בהתאם."""
     utterance = _transcribe_step_recording(token, 'recording')
 
     if not utterance.strip():
         return _resp_message_and_hangup('לא הצלחתי לשמוע אתכם בבירור. אנא התקשרו שוב.')
+
+    if _contains_keyword(utterance, KEYWORDS_VERIFICATION_CODE):
+        caller_phone = params.get('ApiPhone', [None])[0]
+        return _handle_verification_code(caller_phone)
 
     if _contains_keyword(utterance, KEYWORDS_ADD_CONTACT):
         return _handle_add_contact({}, user_data, token)
