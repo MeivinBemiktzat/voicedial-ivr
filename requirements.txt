@@ -1,0 +1,4 @@
+SpeechRecognition==3.10.4
+pydub==0.25.1
+boto3==1.40.0
+requests==2.32.3
