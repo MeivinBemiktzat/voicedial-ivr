@@ -2,8 +2,18 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/*.py",
-      "use": "@vercel/python"
+      "src": "api/index.py",
+      "use": "@vercel/python",
+      "config": {
+        "includeFiles": "api/**"
+      }
+    },
+    {
+      "src": "api/web.py",
+      "use": "@vercel/python",
+      "config": {
+        "includeFiles": "api/**"
+      }
     },
     {
       "src": "public/**",
