@@ -23,12 +23,23 @@ api/index.py
 
 import os
 import re
+import sys
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
-import storage
-import transcription
+# הוספת תיקיית השורש ותיקיית api לנתיבי החיפוש של פייתון
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+for path in (current_dir, parent_dir):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
+# ייבוא גמיש התומך בכל אופני ההרצה ב-Vercel
+try:
+    import storage
+    import transcription
+except ImportError:
+    from api import storage, transcription
 # --- טוקן ה-Management API של ימות (עבור הורדת הקלטות) ---
 # בכוונה **אין** כאן משתני סביבה עם מספר מערכת/סיסמה. הטוקן מגיע בכל
 # בקשה כפרמטר ApiYemotToken, שמוגדר פעם אחת בהגדרת השלוחה (ext.ini) -
