@@ -360,15 +360,10 @@ def _handle_main_intent(params: dict, user_data: dict, token: str) -> str:
 # --------------------------------------------------------------------------
 
 def handle_request(params: dict) -> str:
-    """params: dict שמגיע מ-parse_qs (כל ערך הוא list של strings).
-    מחזיר מחרוזת טקסט פשוט - תשובת ה-API לימות המשיח."""
-
     phone = params.get('ApiPhone', [None])[0]
     if not phone:
         return _resp_message_and_hangup('שגיאה: לא התקבל מספר מתקשר.')
 
-    # טוקן ה-API של ימות מגיע עם כל בקשה (מוגדר פעם אחת בהגדרת השלוחה,
-    # ext.ini) - ולא נקרא יותר ממשתני סביבה ב-Vercel. ר' YEMOT_TOKEN_PARAM.
     token = params.get(YEMOT_TOKEN_PARAM, [None])[0]
     if not token:
         return _resp_message_and_hangup(
@@ -390,10 +385,19 @@ def handle_request(params: dict) -> str:
     if params.get('ContactChoice', [None])[0] is not None:
         return _handle_contacts_menu(params, user_data, token)
 
-    # ברירת מחדל: זוהי הבקשה הראשונה בשיחה (אחרי הקלטת הכוונה החופשית)
-    return _handle_main_intent(params, user_data, token)
+    # האם המשתמש כבר הקליט את בקשתו? אם כן - מתמללים ומנתחים
+    if params.get('MainSpoken', [None])[0] is not None:
+        return _handle_main_intent(params, user_data, token)
 
-
+    # כניסה ראשונה לשלוחה: משמיעים הנחיה ומקליטים את המתקשר
+    return _resp_read_record(
+        prompt_text='אנא אמרו את שם איש הקשר או את הפעולה המבוקשת.',
+        param_name='MainSpoken',
+        folder=RECORDING_DIR,
+        filename='recording',
+        min_sec=1,
+        max_sec=10,
+    )
 # --------------------------------------------------------------------------
 # Vercel Python serverless handler
 # --------------------------------------------------------------------------
