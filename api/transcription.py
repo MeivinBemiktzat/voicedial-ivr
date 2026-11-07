@@ -67,16 +67,19 @@ def transcribe_wav_bytes(wav_bytes: bytes) -> str:
 YEMOT_MANAGEMENT_API_BASE = 'https://www.call2all.co.il/ym/api'
 
 
-def download_recording(system_id: str, password: str, ivr_path: str, timeout: int = 15) -> bytes:
+def download_recording(token: str, ivr_path: str, timeout: int = 15) -> bytes:
     """מוריד קובץ הקלטה (wav) מהמערכת של ימות המשיח דרך ה-Management API
     (פקודת DownloadFile), ומחזיר את בייטי ה-wav הגולמיים.
 
-    system_id / password - פרטי ההתחברות של מערכת הימות (נטענים ממשתני סביבה
-    בקוד הקורא, ולא מוטבעים כאן).
+    token - טוקן ה-API של מערכת הימות, כפי שהוא מגיע מהגדרת השלוחה
+            (ext.ini) בכל בקשה. יכול להיות טוקן קבוע שהונפק דרך אתר
+            הניהול של ימות המשיח (מומלץ - אינו פג תוקף), או (לשם
+            תאימות לאחור בלבד) מחרוזת בפורמט "מספר_מערכת:סיסמה".
+            הקוד כאן אגנוסטי לפורמט - הוא פשוט מעביר את הערך כמו שהוא
+            בפרמטר token של בקשת ה-Management API, כנדרש בתיעוד ימות.
     ivr_path - נתיב הקובץ בתוך ivr2, לדוגמה: "/5/6/000.wav"
                (צריך להתחיל ב-/ ולא להסתיים ב-/)
     """
-    token = f'{system_id}:{password}'
     path = f'ivr2:{ivr_path}'
 
     response = requests.get(
@@ -96,7 +99,7 @@ def download_recording(system_id: str, password: str, ivr_path: str, timeout: in
     return response.content
 
 
-def transcribe_yemot_recording(system_id: str, password: str, ivr_path: str) -> str:
+def transcribe_yemot_recording(token: str, ivr_path: str) -> str:
     """פונקציית נוחות: מורידה הקלטה מימות ומתמללת אותה במקשה אחת."""
-    wav_bytes = download_recording(system_id, password, ivr_path)
+    wav_bytes = download_recording(token, ivr_path)
     return transcribe_wav_bytes(wav_bytes)
