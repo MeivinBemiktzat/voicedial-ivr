@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VoiceDial IVR — ייבוא אנשי קשר</title>
+<style>
+  :root {
+    --ink: #1c2230;
+    --ink-soft: #4a5368;
+    --paper: #f6f4ee;
+    --panel: #ffffff;
+    --line: #dcd8cc;
+    --accent: #b5672f;
+    --accent-ink: #ffffff;
+    --accent-soft: #f1e4d6;
+    --ok: #2f6b4f;
+    --ok-soft: #e4efe8;
+    --err: #a3362a;
+    --err-soft: #f7e6e3;
+    --radius: 14px;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Heebo", "Segoe UI", Tahoma, Arial, sans-serif;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 20px 80px;
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 460px;
+  }
+
+  header.site {
+    text-align: center;
+    margin-bottom: 36px;
+  }
+
+  header.site .mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--paper);
+    font-size: 22px;
+    margin-bottom: 14px;
+  }
+
+  header.site h1 {
+    font-size: 21px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+
+  header.site p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 14.5px;
+    line-height: 1.6;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 28px 26px;
+    box-shadow: 0 1px 2px rgba(28, 34, 48, 0.04);
+  }
+
+  .step-label {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.02em;
+    margin-bottom: 6px;
+  }
+
+  h2.panel-title {
+    font-size: 18px;
+    margin: 0 0 10px;
+  }
+
+  .panel p.lead {
+    color: var(--ink-soft);
+    font-size: 14.5px;
+    line-height: 1.65;
+    margin: 0 0 22px;
+  }
+
+  label {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 600;
+    margin-bottom: 7px;
+  }
+
+  input[type="tel"],
+  input[type="text"] {
+    width: 100%;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    padding: 13px 14px;
+    font-size: 17px;
+    font-family: var(--mono);
+    letter-spacing: 0.03em;
+    background: var(--paper);
+    color: var(--ink);
+    transition: border-color 0.15s ease;
+  }
+
+  input[type="tel"]:focus,
+  input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  input.code-input {
+    text-align: center;
+    font-size: 26px;
+    letter-spacing: 0.3em;
+    padding-inline-start: 24px;
+  }
+
+  button {
+    appearance: none;
+    border: none;
+    cursor: pointer;
+    border-radius: 10px;
+    font-family: inherit;
+    font-weight: 700;
+    font-size: 15px;
+  }
+
+  button.primary {
+    width: 100%;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 14px;
+    margin-top: 20px;
+    transition: background 0.15s ease, opacity 0.15s ease;
+  }
+
+  button.primary:hover { background: #30384a; }
+  button.primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  button.link {
+    background: none;
+    color: var(--ink-soft);
+    font-weight: 600;
+    font-size: 13.5px;
+    padding: 6px 0;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  button.link:hover { color: var(--ink); }
+
+  .call-card {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--accent-soft);
+    border: 1px solid #e3cba9;
+    border-radius: 10px;
+    padding: 16px;
+    margin: 18px 0 22px;
+  }
+
+  .call-card .icon {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .call-card .text {
+    font-size: 14px;
+    line-height: 1.65;
+    color: #5a3a1f;
+  }
+
+  .call-card .text strong {
+    display: block;
+    font-size: 14.5px;
+    margin-bottom: 3px;
+    color: #4a2e15;
+  }
+
+  .call-card .phrase {
+    display: inline-block;
+    font-family: var(--mono);
+    background: #fff;
+    border: 1px solid #e3cba9;
+    border-radius: 6px;
+    padding: 1px 8px;
+    margin: 0 2px;
+  }
+
+  .alert {
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13.5px;
+    line-height: 1.6;
+    margin-bottom: 18px;
+  }
+
+  .alert.err { background: var(--err-soft); color: var(--err); border: 1px solid #ecc6c0; }
+  .alert.ok { background: var(--ok-soft); color: var(--ok); border: 1px solid #c3dfcd; }
+
+  .hidden { display: none !important; }
+
+  .top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+  }
+
+  .phone-pill {
+    font-family: var(--mono);
+    font-size: 13.5px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 13px;
+    direction: ltr;
+    display: inline-block;
+  }
+
+  .dropzone {
+    border: 2px dashed var(--line);
+    border-radius: 12px;
+    padding: 30px 18px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .dropzone:hover,
+  .dropzone.drag {
+    border-color: var(--accent);
+    background: #fdf8f3;
+  }
+
+  .dropzone .big-icon {
+    font-size: 30px;
+    margin-bottom: 10px;
+  }
+
+  .dropzone .dz-title {
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 4px;
+  }
+
+  .dropzone .dz-sub {
+    color: var(--ink-soft);
+    font-size: 13px;
+  }
+
+  .formats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 14px;
+  }
+
+  .formats span {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 3px 8px;
+    color: var(--ink-soft);
+  }
+
+  .file-chip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 11px 14px;
+    margin-top: 14px;
+    font-size: 14px;
+  }
+
+  .file-chip .name {
+    font-family: var(--mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-chip button {
+    background: none;
+    color: var(--ink-soft);
+    font-size: 13px;
+    text-decoration: underline;
+  }
+
+  .footer-actions {
+    text-align: center;
+    margin-top: 22px;
+  }
+
+  .result-summary {
+    text-align: center;
+    padding: 10px 0 4px;
+  }
+
+  .result-summary .big-num {
+    font-size: 38px;
+    font-weight: 800;
+    color: var(--ok);
+    line-height: 1;
+  }
+
+  .result-summary .label {
+    color: var(--ink-soft);
+    font-size: 13.5px;
+    margin-top: 6px;
+  }
+
+  .result-breakdown {
+    display: flex;
+    justify-content: center;
+    gap: 22px;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .result-breakdown b { color: var(--ink); }
+
+  footer.site-footer {
+    text-align: center;
+    margin-top: 32px;
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-inline-end: 8px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #eef0f4;
+      --ink-soft: #a7adbc;
+      --paper: #14171f;
+      --panel: #1b1f29;
+      --line: #2b3040;
+      --accent: #d78a4e;
+      --accent-soft: #2c2117;
+      --ok: #5fb98a;
+      --ok-soft: #16261e;
+      --err: #e08177;
+      --err-soft: #2a1a18;
+    }
+    header.site .mark { background: var(--accent); color: #1c1200; }
+    .call-card { border-color: #3a2c18; }
+    .call-card .text, .call-card .text strong { color: #e8cfab; }
+    .call-card .phrase { background: #221a0f; border-color: #3a2c18; color: #e8cfab; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="site">
+    <div class="mark">☎</div>
+    <h1>VoiceDial IVR</h1>
+    <p>ייבוא אנשי קשר לרשימה שלכם במערכת החיוג הקולי</p>
+  </header>
+
+  <!-- שלב 1: הזנת מספר טלפון -->
+  <section id="step-phone" class="panel">
+    <div class="step-label">שלב 1 מתוך 2</div>
+    <h2 class="panel-title">הזינו את מספר הטלפון שלכם</h2>
+    <p class="lead">זהו המספר שאתם מתקשרים ממנו למערכת החיוג הקולי. אליו ייובאו אנשי הקשר.</p>
+
+    <div id="phone-alert"></div>
+
+    <label for="phone-input">מספר טלפון</label>
+    <input type="tel" id="phone-input" placeholder="05XXXXXXXX" inputmode="numeric" autocomplete="tel" dir="ltr">
+
+    <button class="primary" id="send-code-btn">שלח קוד אימות</button>
+  </section>
+
+  <!-- שלב 2: הזנת קוד אימות -->
+  <section id="step-code" class="panel hidden">
+    <div class="step-label">שלב 2 מתוך 2</div>
+    <h2 class="panel-title">אימות המספר</h2>
+
+    <div class="call-card">
+      <div class="icon">☎</div>
+      <div class="text">
+        <strong>התקשרו עכשיו למערכת מהמספר שהזנתם</strong>
+        לאחר החיוג, אמרו את המילים <span class="phrase">קוד אימות</span> —
+        תשמעו קוד בן 6 ספרות. הזינו אותו כאן למטה.
+      </div>
+    </div>
+
+    <div id="code-alert"></div>
+
+    <label for="code-input">קוד אימות בן 6 ספרות</label>
+    <input type="text" id="code-input" class="code-input" maxlength="6" inputmode="numeric" autocomplete="one-time-code" dir="ltr" placeholder="______">
+
+    <button class="primary" id="verify-code-btn">אמת קוד</button>
+
+    <div class="footer-actions">
+      <button class="link" id="back-to-phone-btn">מספר שגוי? חזרה לשלב הקודם</button>
+    </div>
+  </section>
+
+  <!-- שלב 3: ממשק מאומת - העלאת קובץ -->
+  <section id="step-upload" class="panel hidden">
+    <div class="top-bar">
+      <span class="phone-pill" id="authed-phone-pill"></span>
+      <button class="link" id="logout-btn">יציאה</button>
+    </div>
+
+    <h2 class="panel-title">העלאת אנשי קשר</h2>
+    <p class="lead">בחרו קובץ אנשי קשר שיתווסף לרשימה שלכם במערכת החיוג הקולי.</p>
+
+    <div id="upload-alert"></div>
+
+    <div class="dropzone" id="dropzone">
+      <div class="big-icon">📇</div>
+      <div class="dz-title">גררו קובץ לכאן, או לחצו לבחירה</div>
+      <div class="dz-sub">VCF (vCard) · CSV · TXT — עד 5MB</div>
+      <input type="file" id="file-input" accept=".vcf,.vcard,.csv,.txt" class="hidden">
+    </div>
+
+    <div class="formats">
+      <span>.vcf</span><span>.vcard</span><span>.csv</span><span>.txt</span>
+    </div>
+
+    <div id="file-chip-wrap"></div>
+
+    <button class="primary hidden" id="upload-btn">העלה אנשי קשר</button>
+  </section>
+
+  <!-- שלב 4: סיכום תוצאה -->
+  <section id="step-result" class="panel hidden">
+    <div class="result-summary">
+      <div class="big-num" id="result-total">0</div>
+      <div class="label">אנשי קשר ברשימה שלכם כעת</div>
+    </div>
+    <div class="result-breakdown">
+      <div>נוספו: <b id="result-added">0</b></div>
+      <div>עודכנו: <b id="result-updated">0</b></div>
+    </div>
+    <button class="primary" id="upload-more-btn">העלאת קובץ נוסף</button>
+    <div class="footer-actions">
+      <button class="link" id="result-logout-btn">יציאה</button>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    המספר שהוזן מאומת באמצעות שיחה למערכת — לעולם איננו מוסיפים אנשי קשר למספר שלא עבר אימות בפועל.
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var API_BASE = '/api/web';
+
+  var els = {
+    stepPhone: document.getElementById('step-phone'),
+    stepCode: document.getElementById('step-code'),
+    stepUpload: document.getElementById('step-upload'),
+    stepResult: document.getElementById('step-result'),
+
+    phoneInput: document.getElementById('phone-input'),
+    phoneAlert: document.getElementById('phone-alert'),
+    sendCodeBtn: document.getElementById('send-code-btn'),
+
+    codeInput: document.getElementById('code-input'),
+    codeAlert: document.getElementById('code-alert'),
+    verifyCodeBtn: document.getElementById('verify-code-btn'),
+    backToPhoneBtn: document.getElementById('back-to-phone-btn'),
+
+    authedPhonePill: document.getElementById('authed-phone-pill'),
+    logoutBtn: document.getElementById('logout-btn'),
+    uploadAlert: document.getElementById('upload-alert'),
+    dropzone: document.getElementById('dropzone'),
+    fileInput: document.getElementById('file-input'),
+    fileChipWrap: document.getElementById('file-chip-wrap'),
+    uploadBtn: document.getElementById('upload-btn'),
+
+    resultTotal: document.getElementById('result-total'),
+    resultAdded: document.getElementById('result-added'),
+    resultUpdated: document.getElementById('result-updated'),
+    uploadMoreBtn: document.getElementById('upload-more-btn'),
+    resultLogoutBtn: document.getElementById('result-logout-btn'),
+  };
+
+  var state = {
+    phone: '',
+    selectedFile: null,
+  };
+
+  function showStep(name) {
+    [els.stepPhone, els.stepCode, els.stepUpload, els.stepResult].forEach(function (el) {
+      el.classList.add('hidden');
+    });
+    ({ phone: els.stepPhone, code: els.stepCode, upload: els.stepUpload, result: els.stepResult })[name]
+      .classList.remove('hidden');
+  }
+
+  function setAlert(container, kind, message) {
+    if (!message) {
+      container.innerHTML = '';
+      return;
+    }
+    container.innerHTML = '<div class="alert ' + kind + '">' + escapeHtml(message) + '</div>';
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function setLoading(btn, loading, label) {
+    btn.disabled = loading;
+    btn.innerHTML = loading ? '<span class="spinner"></span>' + label : label;
+  }
+
+  function apiPost(action, bodyParams) {
+    return fetch(API_BASE + '?action=' + encodeURIComponent(action), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      credentials: 'same-origin',
+      body: new URLSearchParams(bodyParams || {}),
+    }).then(function (res) {
+      return res.json().then(function (data) { return { status: res.status, data: data }; });
+    });
+  }
+
+  function apiGet(action) {
+    return fetch(API_BASE + '?action=' + encodeURIComponent(action), {
+      method: 'GET',
+      credentials: 'same-origin',
+    }).then(function (res) {
+      return res.json().then(function (data) { return { status: res.status, data: data }; });
+    });
+  }
+
+  // --- שלב 1: שליחת קוד ---
+  els.sendCodeBtn.addEventListener('click', function () {
+    var phone = els.phoneInput.value.replace(/\D/g, '');
+    if (phone.length < 7) {
+      setAlert(els.phoneAlert, 'err', 'אנא הזינו מספר טלפון תקין.');
+      return;
+    }
+
+    setAlert(els.phoneAlert, '', '');
+    setLoading(els.sendCodeBtn, true, 'שולח...');
+
+    apiPost('request_code', { phone: phone }).then(function (res) {
+      setLoading(els.sendCodeBtn, false, 'שלח קוד אימות');
+      if (res.status !== 200) {
+        setAlert(els.phoneAlert, 'err', res.data.error || 'אירעה שגיאה.');
+        return;
+      }
+      state.phone = phone;
+      els.codeInput.value = '';
+      setAlert(els.codeAlert, '', '');
+      showStep('code');
+      els.codeInput.focus();
+    }).catch(function () {
+      setLoading(els.sendCodeBtn, false, 'שלח קוד אימות');
+      setAlert(els.phoneAlert, 'err', 'לא ניתן להתחבר לשרת. נסו שוב.');
+    });
+  });
+
+  els.backToPhoneBtn.addEventListener('click', function () {
+    setAlert(els.codeAlert, '', '');
+    showStep('phone');
+  });
+
+  // --- שלב 2: אימות קוד ---
+  els.verifyCodeBtn.addEventListener('click', function () {
+    var code = els.codeInput.value.replace(/\D/g, '');
+    if (code.length !== 6) {
+      setAlert(els.codeAlert, 'err', 'הקוד צריך להיות בן 6 ספרות.');
+      return;
+    }
+
+    setAlert(els.codeAlert, '', '');
+    setLoading(els.verifyCodeBtn, true, 'מאמת...');
+
+    apiPost('verify_code', { phone: state.phone, code: code }).then(function (res) {
+      setLoading(els.verifyCodeBtn, false, 'אמת קוד');
+      if (res.status !== 200) {
+        setAlert(els.codeAlert, 'err', res.data.error || 'אימות נכשל.');
+        return;
+      }
+      enterAuthenticated(res.data.phone);
+    }).catch(function () {
+      setLoading(els.verifyCodeBtn, false, 'אמת קוד');
+      setAlert(els.codeAlert, 'err', 'לא ניתן להתחבר לשרת. נסו שוב.');
+    });
+  });
+
+  function enterAuthenticated(phone) {
+    els.authedPhonePill.textContent = phone;
+    showStep('upload');
+  }
+
+  // --- שלב 3: העלאת קובץ ---
+  els.dropzone.addEventListener('click', function () { els.fileInput.click(); });
+
+  els.dropzone.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    els.dropzone.classList.add('drag');
+  });
+  els.dropzone.addEventListener('dragleave', function () {
+    els.dropzone.classList.remove('drag');
+  });
+  els.dropzone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    els.dropzone.classList.remove('drag');
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      setSelectedFile(e.dataTransfer.files[0]);
+    }
+  });
+
+  els.fileInput.addEventListener('change', function () {
+    if (els.fileInput.files && els.fileInput.files[0]) {
+      setSelectedFile(els.fileInput.files[0]);
+    }
+  });
+
+  function setSelectedFile(file) {
+    state.selectedFile = file;
+    els.fileChipWrap.innerHTML =
+      '<div class="file-chip"><span class="name">' + escapeHtml(file.name) +
+      '</span><button type="button" id="clear-file-btn">הסר</button></div>';
+    document.getElementById('clear-file-btn').addEventListener('click', function () {
+      state.selectedFile = null;
+      els.fileChipWrap.innerHTML = '';
+      els.uploadBtn.classList.add('hidden');
+      els.fileInput.value = '';
+    });
+    els.uploadBtn.classList.remove('hidden');
+    setAlert(els.uploadAlert, '', '');
+  }
+
+  els.uploadBtn.addEventListener('click', function () {
+    if (!state.selectedFile) return;
+
+    setAlert(els.uploadAlert, '', '');
+    setLoading(els.uploadBtn, true, 'מעלה...');
+
+    var formData = new FormData();
+    formData.append('file', state.selectedFile);
+
+    fetch(API_BASE + '?action=upload_contacts', {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: formData,
+    }).then(function (res) {
+      return res.json().then(function (data) { return { status: res.status, data: data }; });
+    }).then(function (res) {
+      setLoading(els.uploadBtn, false, 'העלה אנשי קשר');
+      if (res.status !== 200) {
+        setAlert(els.uploadAlert, 'err', res.data.error || 'ההעלאה נכשלה.');
+        return;
+      }
+      showResult(res.data);
+    }).catch(function () {
+      setLoading(els.uploadBtn, false, 'העלה אנשי קשר');
+      setAlert(els.uploadAlert, 'err', 'לא ניתן להתחבר לשרת. נסו שוב.');
+    });
+  });
+
+  function showResult(data) {
+    els.resultTotal.textContent = data.total;
+    els.resultAdded.textContent = data.added;
+    els.resultUpdated.textContent = data.updated;
+    showStep('result');
+  }
+
+  els.uploadMoreBtn.addEventListener('click', function () {
+    state.selectedFile = null;
+    els.fileChipWrap.innerHTML = '';
+    els.uploadBtn.classList.add('hidden');
+    els.fileInput.value = '';
+    showStep('upload');
+  });
+
+  // --- יציאה ---
+  function doLogout() {
+    apiGet('logout').then(function () {
+      state.phone = '';
+      els.phoneInput.value = '';
+      showStep('phone');
+    });
+  }
+  els.logoutBtn.addEventListener('click', doLogout);
+  els.resultLogoutBtn.addEventListener('click', doLogout);
+
+  // --- בדיקת session קיים בטעינת הדף ---
+  apiGet('check_session').then(function (res) {
+    if (res.status === 200 && res.data.authenticated) {
+      enterAuthenticated(res.data.phone);
+    } else {
+      showStep('phone');
+    }
+  }).catch(function () {
+    showStep('phone');
+  });
+})();
+</script>
+</body>
+</html>
