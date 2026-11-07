@@ -14,49 +14,41 @@ transcription.py
 קובץ ה-wav שנשמר דרך ה-Management API (DownloadFile) ומתמללים אותו כאן,
 בעזרת הפונקציה הזו בלבד.
 """
+"""
+transcription.py
+=================
+תמלול קול מותאם ל-Vercel ללא צורך ב-ffmpeg או ב-pydub.
+"""
 
 import io
-
 import requests
 import speech_recognition as sr
-from pydub import AudioSegment
 
-# שפת התמלול - עברית. ניתן לשנות ל-'en-US' וכו' אם יידרש בעתיד.
 TRANSCRIBE_LANGUAGE = 'he-IL'
-
-# משך ריפוד השקט לפני/אחרי ההקלטה (מילישניות) - כפי שהתבקש במקור
 SILENCE_PADDING_MS = 500
 
 
-def pad_with_silence(wav_bytes: bytes) -> bytes:
-    """מוסיף שקט לפני ואחרי קובץ wav, ומחזיר בייטים של wav חדש.
-
-    (זהה לחלוטין לפונקציה שסופקה על ידי המשתמש בקובץ transcribe.py)
-    """
-    audio = AudioSegment.from_wav(io.BytesIO(wav_bytes))
-    silence = AudioSegment.silent(duration=SILENCE_PADDING_MS, frame_rate=audio.frame_rate)
-    padded = silence + audio + silence
-    out = io.BytesIO()
-    padded.export(out, format='wav')
-    return out.getvalue()
-
-
 def transcribe_wav_bytes(wav_bytes: bytes) -> str:
-    """מתמלל בייטי wav לטקסט. מחזיר מחרוזת ריקה אם לא זוהה דיבור.
-
-    (זהה לחלוטין לפונקציה שסופקה על ידי המשתמש בקובץ transcribe.py -
-    כולל שיטת התמלול recognize_google() ללא API key חיצוני)
-    """
-    padded_bytes = pad_with_silence(wav_bytes)
-
+    """מתמלל בייטי wav לטקסט.
+    מבצע ריפוד שקט ישירות על נתוני ה-PCM ללא צורך בתוכנות חיצוניות (ffmpeg)."""
     recognizer = sr.Recognizer()
-    with sr.AudioFile(io.BytesIO(padded_bytes)) as source:
+
+    with sr.AudioFile(io.BytesIO(wav_bytes)) as source:
         audio_data = recognizer.record(source)
 
+    # הוספת 500ms שקט לפני ואחרי להגברת הדיוק של גוגל
+    silence_samples = int(audio_data.sample_rate * (SILENCE_PADDING_MS / 1000.0))
+    silence_bytes = b'\x00' * (audio_data.sample_width * silence_samples)
+
+    padded_audio = sr.AudioData(
+        silence_bytes + audio_data.frame_data + silence_bytes,
+        audio_data.sample_rate,
+        audio_data.sample_width,
+    )
+
     try:
-        return recognizer.recognize_google(audio_data, language=TRANSCRIBE_LANGUAGE)
+        return recognizer.recognize_google(padded_audio, language=TRANSCRIBE_LANGUAGE)
     except sr.UnknownValueError:
-        # לא זוהה דיבור בהקלטה - לא שגיאה, פשוט אין תוצאה
         return ''
     except sr.RequestError as exc:
         raise RuntimeError(f'שירות התמלול של גוגל לא זמין כרגע: {exc}') from exc
@@ -68,18 +60,6 @@ YEMOT_MANAGEMENT_API_BASE = 'https://www.call2all.co.il/ym/api'
 
 
 def download_recording(token: str, ivr_path: str, timeout: int = 15) -> bytes:
-    """מוריד קובץ הקלטה (wav) מהמערכת של ימות המשיח דרך ה-Management API
-    (פקודת DownloadFile), ומחזיר את בייטי ה-wav הגולמיים.
-
-    token - טוקן ה-API של מערכת הימות, כפי שהוא מגיע מהגדרת השלוחה
-            (ext.ini) בכל בקשה. יכול להיות טוקן קבוע שהונפק דרך אתר
-            הניהול של ימות המשיח (מומלץ - אינו פג תוקף), או (לשם
-            תאימות לאחור בלבד) מחרוזת בפורמט "מספר_מערכת:סיסמה".
-            הקוד כאן אגנוסטי לפורמט - הוא פשוט מעביר את הערך כמו שהוא
-            בפרמטר token של בקשת ה-Management API, כנדרש בתיעוד ימות.
-    ivr_path - נתיב הקובץ בתוך ivr2, לדוגמה: "/5/6/000.wav"
-               (צריך להתחיל ב-/ ולא להסתיים ב-/)
-    """
     path = f'ivr2:{ivr_path}'
 
     response = requests.get(
@@ -91,7 +71,6 @@ def download_recording(token: str, ivr_path: str, timeout: int = 15) -> bytes:
 
     content_type = response.headers.get('Content-Type', '')
     if 'audio' not in content_type and 'wav' not in content_type:
-        # ימות מחזירה JSON עם שגיאה (responseStatus) כאשר הקובץ לא נמצא/נכשל
         raise RuntimeError(
             f'הורדת קובץ ההקלטה מימות נכשלה (path={ivr_path}): {response.text[:300]}'
         )
@@ -100,6 +79,5 @@ def download_recording(token: str, ivr_path: str, timeout: int = 15) -> bytes:
 
 
 def transcribe_yemot_recording(token: str, ivr_path: str) -> str:
-    """פונקציית נוחות: מורידה הקלטה מימות ומתמללת אותה במקשה אחת."""
     wav_bytes = download_recording(token, ivr_path)
     return transcribe_wav_bytes(wav_bytes)
