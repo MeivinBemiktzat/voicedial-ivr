@@ -4,6 +4,14 @@
     {
       "src": "api/index.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "api/web.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -12,8 +20,12 @@
       "dest": "api/index.py"
     },
     {
+      "src": "/api/web",
+      "dest": "api/web.py"
+    },
+    {
       "src": "/(.*)",
-      "dest": "api/index.py"
+      "dest": "/public/$1"
     }
   ]
 }
