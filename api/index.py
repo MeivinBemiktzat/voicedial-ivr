@@ -29,9 +29,12 @@ from urllib.parse import parse_qs, urlparse
 import storage
 import transcription
 
-# --- פרטי התחברות ל-Management API של ימות (עבור הורדת הקלטות) ---
-YEMOT_SYSTEM_ID = os.environ.get('YEMOT_SYSTEM_ID')
-YEMOT_SYSTEM_PASSWORD = os.environ.get('YEMOT_SYSTEM_PASSWORD')
+# --- טוקן ה-Management API של ימות (עבור הורדת הקלטות) ---
+# בכוונה **אין** כאן משתני סביבה עם מספר מערכת/סיסמה. הטוקן מגיע בכל
+# בקשה כפרמטר ApiYemotToken, שמוגדר פעם אחת בהגדרת השלוחה (ext.ini) -
+# ר' ext.ini.example. מומלץ להשתמש בטוקן קבוע שהונפק דרך אתר הניהול של
+# ימות המשיח (אינו פג תוקף), ולא בפורמט הישן "מספר_מערכת:סיסמה".
+YEMOT_TOKEN_PARAM = 'ApiYemotToken'
 
 # תיקיית ה-IVR שבה המערכת שומרת/מחפשת את קובצי ההקלטה הזמניים.
 # צריכה להתאים להגדרת api_dir / לנתיב שמוגדר בכל שאלת record ב-ext.ini
@@ -65,15 +68,19 @@ HEBREW_DIGIT_WORDS = {
 # עזרי תמלול / הורדה
 # --------------------------------------------------------------------------
 
-def _transcribe_step_recording(filename: str) -> str:
-    """מוריד ומתמלל קובץ הקלטה ששמור בתיקיית ה-IVR שלנו."""
-    if not YEMOT_SYSTEM_ID or not YEMOT_SYSTEM_PASSWORD:
-        raise RuntimeError('חסרים משתני הסביבה YEMOT_SYSTEM_ID / YEMOT_SYSTEM_PASSWORD')
+def _transcribe_step_recording(token: str, filename: str) -> str:
+    """מוריד ומתמלל קובץ הקלטה ששמור בתיקיית ה-IVR שלנו.
+
+    token - טוקן ה-API של ימות, שמגיע עם כל בקשה מהגדרת השלוחה (ולא
+            ממשתני סביבה ב-Vercel) - ר' YEMOT_TOKEN_PARAM לעיל.
+    """
+    if not token:
+        raise RuntimeError(
+            f'חסר טוקן ימות בבקשה - יש להגדיר {YEMOT_TOKEN_PARAM} בהגדרת השלוחה (ext.ini)'
+        )
 
     ivr_path = f'{RECORDING_DIR}/{filename}.wav'
-    return transcription.transcribe_yemot_recording(
-        YEMOT_SYSTEM_ID, YEMOT_SYSTEM_PASSWORD, ivr_path
-    )
+    return transcription.transcribe_yemot_recording(token, ivr_path)
 
 
 # --------------------------------------------------------------------------
@@ -155,13 +162,13 @@ def _resp_read_record(prompt_text: str, param_name: str, folder: str,
 # זרימות משנה
 # --------------------------------------------------------------------------
 
-def _handle_recent_calls(params: dict, user_data: dict) -> str:
+def _handle_recent_calls(params: dict, user_data: dict, token: str) -> str:
     history = user_data.get('history', [])
 
     # האם כבר נבחרה אפשרות מתוך תפריט השיחות האחרונות? (שלב שני בדו-שיח)
     choice_text = params.get('RecentCallChoice', [None])[0]
     if choice_text is not None:
-        choice_text = _transcribe_step_recording('recent_choice')
+        choice_text = _transcribe_step_recording(token, 'recent_choice')
         digits = _extract_phone_digits(choice_text)
         if not digits:
             return _resp_message_and_hangup('לא זיהיתי את הבחירה. אנא התקשרו שוב.')
@@ -197,12 +204,12 @@ def _handle_recent_calls(params: dict, user_data: dict) -> str:
     )
 
 
-def _handle_contacts_menu(params: dict, user_data: dict) -> str:
+def _handle_contacts_menu(params: dict, user_data: dict, token: str) -> str:
     contacts = user_data.get('contacts', [])
 
     choice_text = params.get('ContactChoice', [None])[0]
     if choice_text is not None:
-        spoken = _transcribe_step_recording('contact_choice')
+        spoken = _transcribe_step_recording(token, 'contact_choice')
         contact = storage.find_contact(user_data, spoken)
         if not contact:
             return _resp_message_and_hangup(f'לא מצאתי איש קשר בשם {spoken}.')
@@ -229,7 +236,7 @@ def _handle_contacts_menu(params: dict, user_data: dict) -> str:
     )
 
 
-def _handle_add_contact(params: dict, user_data: dict) -> str:
+def _handle_add_contact(params: dict, user_data: dict, token: str) -> str:
     has_name_step = params.get('NewContactName', [None])[0] is not None
     has_phone_step = params.get('NewContactPhone', [None])[0] is not None
 
@@ -256,8 +263,8 @@ def _handle_add_contact(params: dict, user_data: dict) -> str:
         )
 
     # שני השלבים הושלמו - תמלול ושמירה
-    name_text = _transcribe_step_recording('new_contact_name')
-    phone_text = _transcribe_step_recording('new_contact_phone')
+    name_text = _transcribe_step_recording(token, 'new_contact_name')
+    phone_text = _transcribe_step_recording(token, 'new_contact_phone')
     phone_digits = _extract_phone_digits(phone_text)
 
     if not name_text.strip() or not phone_digits:
@@ -273,21 +280,21 @@ def _handle_add_contact(params: dict, user_data: dict) -> str:
     )
 
 
-def _handle_main_intent(params: dict, user_data: dict) -> str:
+def _handle_main_intent(params: dict, user_data: dict, token: str) -> str:
     """השלב הראשון בשיחה: תמלול הכוונה החופשית וניתוב בהתאם."""
-    utterance = _transcribe_step_recording('recording')
+    utterance = _transcribe_step_recording(token, 'recording')
 
     if not utterance.strip():
         return _resp_message_and_hangup('לא הצלחתי לשמוע אתכם בבירור. אנא התקשרו שוב.')
 
     if _contains_keyword(utterance, KEYWORDS_ADD_CONTACT):
-        return _handle_add_contact({}, user_data)
+        return _handle_add_contact({}, user_data, token)
 
     if _contains_keyword(utterance, KEYWORDS_RECENT_CALLS):
-        return _handle_recent_calls({}, user_data)
+        return _handle_recent_calls({}, user_data, token)
 
     if _contains_keyword(utterance, KEYWORDS_CONTACTS):
-        return _handle_contacts_menu({}, user_data)
+        return _handle_contacts_menu({}, user_data, token)
 
     if _looks_like_phone(utterance):
         digits = _extract_phone_digits(utterance)
@@ -321,23 +328,31 @@ def handle_request(params: dict) -> str:
     if not phone:
         return _resp_message_and_hangup('שגיאה: לא התקבל מספר מתקשר.')
 
+    # טוקן ה-API של ימות מגיע עם כל בקשה (מוגדר פעם אחת בהגדרת השלוחה,
+    # ext.ini) - ולא נקרא יותר ממשתני סביבה ב-Vercel. ר' YEMOT_TOKEN_PARAM.
+    token = params.get(YEMOT_TOKEN_PARAM, [None])[0]
+    if not token:
+        return _resp_message_and_hangup(
+            f'שגיאת הגדרה: חסר הפרמטר {YEMOT_TOKEN_PARAM} בהגדרת השלוחה.'
+        )
+
     user_data = storage.load_user(phone)
 
     # דו-שיח הוספת איש קשר פעיל?
     if params.get('NewContactName', [None])[0] is not None or \
        params.get('NewContactPhone', [None])[0] is not None:
-        return _handle_add_contact(params, user_data)
+        return _handle_add_contact(params, user_data, token)
 
     # דו-שיח תפריט שיחות אחרונות פעיל?
     if params.get('RecentCallChoice', [None])[0] is not None:
-        return _handle_recent_calls(params, user_data)
+        return _handle_recent_calls(params, user_data, token)
 
     # דו-שיח תפריט אנשי קשר פעיל?
     if params.get('ContactChoice', [None])[0] is not None:
-        return _handle_contacts_menu(params, user_data)
+        return _handle_contacts_menu(params, user_data, token)
 
     # ברירת מחדל: זוהי הבקשה הראשונה בשיחה (אחרי הקלטת הכוונה החופשית)
-    return _handle_main_intent(params, user_data)
+    return _handle_main_intent(params, user_data, token)
 
 
 # --------------------------------------------------------------------------
