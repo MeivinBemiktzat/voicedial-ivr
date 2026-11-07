@@ -37,17 +37,28 @@ api/web.py
 """
 
 import json
+import os
+import sys
 from email import policy
 from email.parser import BytesParser
-from http.server import BaseHTTPRequestHandler
 from http.cookies import SimpleCookie
+from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# הוספת תיקיית השורש ותיקיית api לנתיבי החיפוש של פייתון
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
+for path in (current_dir, parent_dir):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
-import auth
-import contacts_import
-import storage
+# ייבוא גמיש שעובד בין אם מורץ מתוך תיקיית api ובין אם משורש הפרויקט
+try:
+    import auth
+    import contacts_import
+    import storage
+except ImportError:
+    from api import auth, contacts_import, storage
 
 SESSION_COOKIE_NAME = 'voicedial_session'
 
